@@ -4,7 +4,9 @@
 // @version      1.0
 // @description  Bulk unfollow Instagram accounts with checkboxes
 // @author       You
-// @match        https://www.instagram.com/*
+// @match        https://www.instagram.com/*/following/
+// @updateurl    https://raw.githubusercontent.com/CJGlitter/instagram-bulk-unfollow/refs/heads/main/instagram-bulk-unfollow.js
+// @downloadurl  https://raw.githubusercontent.com/CJGlitter/instagram-bulk-unfollow/refs/heads/main/instagram-bulk-unfollow.js
 // @grant        none
 // ==/UserScript==
 
