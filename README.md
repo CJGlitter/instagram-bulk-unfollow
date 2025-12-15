@@ -144,14 +144,16 @@ Instagram may temporarily block you from following/unfollowing if you:
 
 ## Technical Details
 
-- **Version:** 1.1.2
+- **Version:** 1.1.3
 - **Compatible with:** Chrome + Tampermonkey
 - **Works on:** instagram.com
 - **Auto-updates:** Yes (from GitHub)
 
 ## License
 
-This script is provided as-is for educational purposes. Use responsibly and at your own risk.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+Copyright (c) 2025 Cory Shane Davis
 
 ## Support
 
