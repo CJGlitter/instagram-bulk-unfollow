@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Instagram Bulk Unfollow
 // @namespace    http://tampermonkey.net/
-// @version      1.1
+// @version      1.1.1
 // @description  Bulk unfollow Instagram accounts with checkboxes
 // @author       You
 // @match        https://www.instagram.com/*
@@ -101,7 +101,14 @@
         button.className = 'bulk-activate-btn';
         button.textContent = 'Activate Bulk Unfollow';
         button.onclick = toggleBulkMode;
-        document.body.appendChild(button);
+
+        // Ensure body exists before appending
+        if (document.body) {
+            document.body.appendChild(button);
+            console.log('Instagram Bulk Unfollow: Activation button added');
+        } else {
+            console.error('Instagram Bulk Unfollow: document.body not available');
+        }
     }
 
     // Create and add the bulk unfollow button
@@ -147,10 +154,10 @@
         }
     }
 
-    // Wait for the follower/following dialog to open
-    function waitForFollowerDialog() {
-        // Check if dialog is already open
-        const dialog = document.evaluate(
+    // Find dialog using multiple methods
+    function findFollowerDialog() {
+        // Method 1: Try XPath
+        const dialogXPath = document.evaluate(
             '/html/body/div[5]/div[2]/div/div/div[1]/div/div[2]/div/div/div/div/div[2]',
             document,
             null,
@@ -158,21 +165,63 @@
             null
         ).singleNodeValue;
 
+        if (dialogXPath) {
+            console.log('Instagram Bulk Unfollow: Found dialog via XPath');
+            return dialogXPath;
+        }
+
+        // Method 2: Look for role="dialog"
+        const dialogRole = document.querySelector('[role="dialog"]');
+        if (dialogRole) {
+            console.log('Instagram Bulk Unfollow: Found dialog via role="dialog"');
+            // Try to find the scrollable container inside
+            const scrollContainer = dialogRole.querySelector('[style*="overflow"]');
+            if (scrollContainer) {
+                console.log('Instagram Bulk Unfollow: Found scroll container inside dialog');
+                return scrollContainer;
+            }
+            return dialogRole;
+        }
+
+        // Method 3: Look for common dialog patterns
+        const possibleDialogs = document.querySelectorAll('div[style*="position: fixed"], div[style*="position:fixed"]');
+        for (const el of possibleDialogs) {
+            // Check if it contains "Following" buttons
+            const hasFollowingButtons = el.querySelector('button')?.textContent.includes('Following');
+            if (hasFollowingButtons) {
+                console.log('Instagram Bulk Unfollow: Found dialog via fixed position + Following button');
+                return el;
+            }
+        }
+
+        console.log('Instagram Bulk Unfollow: No dialog found');
+        return null;
+    }
+
+    // Wait for the follower/following dialog to open
+    function waitForFollowerDialog() {
+        console.log('Instagram Bulk Unfollow: Checking for dialog...');
+
+        // Check if dialog is already open
+        const dialog = findFollowerDialog();
+
         if (dialog) {
             // Dialog is already open
+            console.log('Instagram Bulk Unfollow: Dialog already open, starting bulk mode');
             startBulkMode();
         } else {
+            console.log('Instagram Bulk Unfollow: Dialog not found, waiting for it to appear...');
+
             // Wait for dialog to appear
+            let checkCount = 0;
             const dialogObserver = new MutationObserver((mutations, obs) => {
-                const foundDialog = document.evaluate(
-                    '/html/body/div[5]/div[2]/div/div/div[1]/div/div[2]/div/div/div/div/div[2]',
-                    document,
-                    null,
-                    XPathResult.FIRST_ORDERED_NODE_TYPE,
-                    null
-                ).singleNodeValue;
+                checkCount++;
+                console.log(`Instagram Bulk Unfollow: Checking for dialog (attempt ${checkCount})...`);
+
+                const foundDialog = findFollowerDialog();
 
                 if (foundDialog) {
+                    console.log('Instagram Bulk Unfollow: Dialog appeared! Starting bulk mode...');
                     obs.disconnect();
                     startBulkMode();
                 }
@@ -188,17 +237,21 @@
             const originalText = activateBtn.textContent;
             activateBtn.textContent = 'Waiting for follower dialog...';
 
-            // Reset text after 3 seconds if dialog doesn't appear
+            // Reset text after 10 seconds if dialog doesn't appear
             setTimeout(() => {
                 if (!isActive || !observer) {
+                    console.log('Instagram Bulk Unfollow: Timeout waiting for dialog');
                     activateBtn.textContent = originalText;
+                    dialogObserver.disconnect();
                 }
-            }, 3000);
+            }, 10000);
         }
     }
 
     // Start bulk mode - add checkboxes and observer
     function startBulkMode() {
+        console.log('Instagram Bulk Unfollow: Starting bulk mode...');
+
         createBulkButton();
         addCheckboxes();
 
@@ -210,29 +263,31 @@
         });
 
         // Only observe the dialog container, not the entire body
-        const dialog = document.evaluate(
-            '/html/body/div[5]/div[2]/div/div/div[1]/div/div[2]/div/div/div/div/div[2]',
-            document,
-            null,
-            XPathResult.FIRST_ORDERED_NODE_TYPE,
-            null
-        ).singleNodeValue;
+        const dialog = findFollowerDialog();
 
         if (dialog) {
+            console.log('Instagram Bulk Unfollow: Observing dialog for new followers...');
             observer.observe(dialog, {
                 childList: true,
                 subtree: true
             });
+        } else {
+            console.error('Instagram Bulk Unfollow: Could not find dialog to observe!');
         }
     }
 
     // Add checkboxes to follower rows
     function addCheckboxes() {
+        console.log('Instagram Bulk Unfollow: Adding checkboxes...');
+
         // Find all follower/following buttons that say "Following"
-        const followButtons = Array.from(document.querySelectorAll('button')).filter(btn => 
+        const followButtons = Array.from(document.querySelectorAll('button')).filter(btn =>
             btn.textContent.trim() === 'Following'
         );
 
+        console.log(`Instagram Bulk Unfollow: Found ${followButtons.length} "Following" buttons`);
+
+        let addedCount = 0;
         followButtons.forEach(button => {
             // Check if checkbox already exists
             const parentDiv = button.closest('div[role="button"]')?.parentElement || button.parentElement;
@@ -241,12 +296,14 @@
                 checkbox.type = 'checkbox';
                 checkbox.className = 'bulk-unfollow-checkbox';
                 checkbox.onchange = updateButtonCount;
-                
+
                 // Insert checkbox before the button
                 parentDiv.insertBefore(checkbox, parentDiv.firstChild);
+                addedCount++;
             }
         });
 
+        console.log(`Instagram Bulk Unfollow: Added ${addedCount} new checkboxes`);
         updateButtonCount();
     }
 
@@ -316,10 +373,10 @@
                     
                     // Update button text
                     button.firstChild.textContent = `Unfollowing... (${i + 1}/${checkedBoxes.length})`;
-                    
-                    // Wait before next unfollow (2-5 seconds)
+
+                    // Wait before next unfollow (3-8 seconds)
                     if (i < checkedBoxes.length - 1) {
-                        await randomDelay(2, 5);
+                        await randomDelay(3, 8);
                     }
                 } else {
                     failCount++;
@@ -344,13 +401,37 @@
 
     // Initialize - only create the activation button
     function init() {
+        console.log('Instagram Bulk Unfollow: Initializing...');
+        console.log('Instagram Bulk Unfollow: readyState =', document.readyState);
+        console.log('Instagram Bulk Unfollow: body exists =', !!document.body);
+
+        // Try to create button immediately
         createActivateButton();
+
+        // Also set up observer to re-add button if Instagram removes it
+        const buttonObserver = new MutationObserver(() => {
+            if (!document.getElementById('bulk-activate-btn')) {
+                console.log('Instagram Bulk Unfollow: Button was removed, re-adding...');
+                createActivateButton();
+            }
+        });
+
+        if (document.body) {
+            buttonObserver.observe(document.body, {
+                childList: true,
+                subtree: false
+            });
+        }
     }
 
-    // Wait for page to load
+    // Wait for page to load and retry initialization
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
     } else {
         init();
     }
+
+    // Also try after a short delay in case Instagram's React app clears everything
+    setTimeout(init, 1000);
+    setTimeout(init, 3000);
 })();
