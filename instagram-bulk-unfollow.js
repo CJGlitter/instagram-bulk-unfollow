@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name         Instagram Bulk Unfollow
 // @namespace    http://tampermonkey.net/
-// @version      1.0
+// @version      1.1
 // @description  Bulk unfollow Instagram accounts with checkboxes
 // @author       You
-// @match        https://www.instagram.com/*/following/
+// @match        https://www.instagram.com/*
 // @updateurl    https://raw.githubusercontent.com/CJGlitter/instagram-bulk-unfollow/refs/heads/main/instagram-bulk-unfollow.js
 // @downloadurl  https://raw.githubusercontent.com/CJGlitter/instagram-bulk-unfollow/refs/heads/main/instagram-bulk-unfollow.js
 // @grant        none
@@ -14,6 +14,8 @@
     'use strict';
 
     let isProcessing = false;
+    let isActive = false;
+    let observer = null;
 
     // CSS for the UI elements
     const styles = `
@@ -45,6 +47,30 @@
             background: #ccc;
             cursor: not-allowed;
         }
+        .bulk-activate-btn {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            z-index: 9999;
+            padding: 12px 24px;
+            background: #0095f6;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 14px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .bulk-activate-btn:hover {
+            background: #1877f2;
+        }
+        .bulk-activate-btn.active {
+            background: #00ba34;
+        }
+        .bulk-activate-btn.active:hover {
+            background: #00a82e;
+        }
         .unfollow-loader {
             display: inline-block;
             width: 16px;
@@ -66,6 +92,18 @@
     styleSheet.textContent = styles;
     document.head.appendChild(styleSheet);
 
+    // Create and add the activation button
+    function createActivateButton() {
+        if (document.getElementById('bulk-activate-btn')) return;
+
+        const button = document.createElement('button');
+        button.id = 'bulk-activate-btn';
+        button.className = 'bulk-activate-btn';
+        button.textContent = 'Activate Bulk Unfollow';
+        button.onclick = toggleBulkMode;
+        document.body.appendChild(button);
+    }
+
     // Create and add the bulk unfollow button
     function createBulkButton() {
         if (document.getElementById('bulk-unfollow-btn')) return;
@@ -76,6 +114,116 @@
         button.textContent = 'Unfollow Selected (0)';
         button.onclick = handleBulkUnfollow;
         document.body.appendChild(button);
+    }
+
+    // Toggle bulk mode on/off
+    function toggleBulkMode() {
+        const activateBtn = document.getElementById('bulk-activate-btn');
+
+        if (isActive) {
+            // Deactivate
+            isActive = false;
+            activateBtn.textContent = 'Activate Bulk Unfollow';
+            activateBtn.classList.remove('active');
+
+            // Stop observer
+            if (observer) {
+                observer.disconnect();
+                observer = null;
+            }
+
+            // Remove checkboxes and bulk button
+            document.querySelectorAll('.bulk-unfollow-checkbox').forEach(cb => cb.remove());
+            const bulkBtn = document.getElementById('bulk-unfollow-btn');
+            if (bulkBtn) bulkBtn.remove();
+        } else {
+            // Activate
+            isActive = true;
+            activateBtn.textContent = 'Deactivate Bulk Unfollow';
+            activateBtn.classList.add('active');
+
+            // Wait for follower dialog and start adding checkboxes
+            waitForFollowerDialog();
+        }
+    }
+
+    // Wait for the follower/following dialog to open
+    function waitForFollowerDialog() {
+        // Check if dialog is already open
+        const dialog = document.evaluate(
+            '/html/body/div[5]/div[2]/div/div/div[1]/div/div[2]/div/div/div/div/div[2]',
+            document,
+            null,
+            XPathResult.FIRST_ORDERED_NODE_TYPE,
+            null
+        ).singleNodeValue;
+
+        if (dialog) {
+            // Dialog is already open
+            startBulkMode();
+        } else {
+            // Wait for dialog to appear
+            const dialogObserver = new MutationObserver((mutations, obs) => {
+                const foundDialog = document.evaluate(
+                    '/html/body/div[5]/div[2]/div/div/div[1]/div/div[2]/div/div/div/div/div[2]',
+                    document,
+                    null,
+                    XPathResult.FIRST_ORDERED_NODE_TYPE,
+                    null
+                ).singleNodeValue;
+
+                if (foundDialog) {
+                    obs.disconnect();
+                    startBulkMode();
+                }
+            });
+
+            dialogObserver.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
+
+            // Show message to user
+            const activateBtn = document.getElementById('bulk-activate-btn');
+            const originalText = activateBtn.textContent;
+            activateBtn.textContent = 'Waiting for follower dialog...';
+
+            // Reset text after 3 seconds if dialog doesn't appear
+            setTimeout(() => {
+                if (!isActive || !observer) {
+                    activateBtn.textContent = originalText;
+                }
+            }, 3000);
+        }
+    }
+
+    // Start bulk mode - add checkboxes and observer
+    function startBulkMode() {
+        createBulkButton();
+        addCheckboxes();
+
+        // Start observing for new content
+        observer = new MutationObserver(() => {
+            if (isActive) {
+                addCheckboxes();
+            }
+        });
+
+        // Only observe the dialog container, not the entire body
+        const dialog = document.evaluate(
+            '/html/body/div[5]/div[2]/div/div/div[1]/div/div[2]/div/div/div/div/div[2]',
+            document,
+            null,
+            XPathResult.FIRST_ORDERED_NODE_TYPE,
+            null
+        ).singleNodeValue;
+
+        if (dialog) {
+            observer.observe(dialog, {
+                childList: true,
+                subtree: true
+            });
+        }
     }
 
     // Add checkboxes to follower rows
@@ -194,21 +342,9 @@
         alert(`Unfollow complete!\nSuccess: ${successCount}\nFailed: ${failCount}`);
     }
 
-    // Observer to detect new content loading
-    const observer = new MutationObserver(() => {
-        addCheckboxes();
-        createBulkButton();
-    });
-
-    // Start observing
+    // Initialize - only create the activation button
     function init() {
-        createBulkButton();
-        addCheckboxes();
-        
-        observer.observe(document.body, {
-            childList: true,
-            subtree: true
-        });
+        createActivateButton();
     }
 
     // Wait for page to load
