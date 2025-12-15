@@ -1,9 +1,10 @@
 // ==UserScript==
 // @name         Instagram Bulk Unfollow
 // @namespace    http://tampermonkey.net/
-// @version      1.1.2
+// @version      1.1.3
 // @description  Bulk unfollow Instagram accounts with checkboxes
 // @author       You
+// @license      MIT
 // @match        https://www.instagram.com/*
 // @updateurl    https://raw.githubusercontent.com/CJGlitter/instagram-bulk-unfollow/refs/heads/main/instagram-bulk-unfollow.js
 // @downloadurl  https://raw.githubusercontent.com/CJGlitter/instagram-bulk-unfollow/refs/heads/main/instagram-bulk-unfollow.js
